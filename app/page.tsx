@@ -13,7 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import TaskPreview from '@/components/TaskPreview';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { FileProcessor } from '@/lib/file-processor';
 import type {
   TaskData,
@@ -54,8 +63,8 @@ export default function Home() {
 
   // UI states
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Load workspace on mount
@@ -197,7 +206,7 @@ export default function Home() {
     }
   };
 
-  const handlePreview = () => {
+  const handleClickSubmit = () => {
     // Validate required fields
     if (!taskName.trim()) {
       showMessage('error', 'El nombre de la tarea es requerido');
@@ -208,10 +217,12 @@ export default function Home() {
       return;
     }
 
-    setIsPreviewOpen(true);
+    // Show confirmation dialog
+    setShowConfirmDialog(true);
   };
 
-  const handleConfirmCreate = async () => {
+  const handleConfirmSubmit = async () => {
+    setShowConfirmDialog(false);
     setIsCreating(true);
     try {
       const taskData: TaskData = {
@@ -252,7 +263,8 @@ export default function Home() {
       setSelectedAssignees([]);
       setSelectedSprint('');
       setTags([]);
-      setIsPreviewOpen(false);
+      setSelectedSpace('');
+      setSpaceSearch('');
     } catch (error: any) {
       showMessage('error', error.message);
     } finally {
@@ -283,8 +295,6 @@ export default function Home() {
     (member.email?.toLowerCase() || '').includes(memberSearch.toLowerCase())
   );
 
-  const getSelectedSpace = () => spaces.find((s) => s.id === selectedSpace) || null;
-  const getSelectedSprint = () => sprints.find((s) => s.id === selectedSprint) || null;
   const getSelectedMembers = () => teamMembers.filter((m) => selectedAssignees.includes(m.id));
 
   return (
@@ -708,39 +718,85 @@ export default function Home() {
             {/* Submit Button */}
             <div className="pt-6 border-t mt-6">
               <Button
-                onClick={handlePreview}
-                disabled={!taskName.trim() || !selectedSpace}
+                onClick={handleClickSubmit}
+                disabled={!taskName.trim() || !selectedSpace || isCreating}
                 className="w-full"
                 size="lg"
-                variant="default"
               >
-                Ver Preview y Enviar a ClickUp
+                {isCreating ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    Creando en ClickUp...
+                  </>
+                ) : (
+                  'Enviar'
+                )}
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Preview Modal */}
-      <TaskPreview
-        taskData={{
-          name: taskName,
-          description: taskDescription,
-          type: taskType,
-          priority: priority,
-          timeEstimate: timeEstimate,
-          assignees: selectedAssignees,
-          sprintId: selectedSprint || undefined,
-          tags: tags.length > 0 ? tags : undefined,
-        }}
-        space={getSelectedSpace()}
-        sprint={getSelectedSprint()}
-        assignees={getSelectedMembers()}
-        isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-        onConfirm={handleConfirmCreate}
-        isCreating={isCreating}
-      />
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar creación de tarea?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2">
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-1">Tarea:</p>
+                  <p className="text-sm">{taskName}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-1">Proyecto:</p>
+                  <p className="text-sm">{spaces.find(s => s.id === selectedSpace)?.name}</p>
+                </div>
+
+                {selectedAssignees.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Asignado a:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {getSelectedMembers().map((m) => (
+                        <Badge key={m.id} variant="secondary" className="text-xs">
+                          {m.username || m.email}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedSprint && (
+                  <div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Sprint:</p>
+                    <p className="text-sm">{sprints.find(s => s.id === selectedSprint)?.name}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-1">Estimación:</p>
+                  <p className="text-sm">
+                    {Math.floor(timeEstimate / 60)}h {timeEstimate % 60}m
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    Esta tarea se creará en ClickUp. Podrás editarla después desde allí.
+                  </p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSubmit}>
+              Confirmar y Crear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
