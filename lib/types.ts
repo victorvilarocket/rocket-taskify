@@ -36,6 +36,20 @@ export interface ClickUpMember {
   profilePicture?: string;
 }
 
+export interface ClickUpEpic {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+export interface ClickUpStatus {
+  id: string;
+  status: string;
+  color?: string;
+  orderindex: number;
+  type: string;
+}
+
 // Task Types
 export type TaskType = 'task' | 'bug' | 'meet';
 export type TaskPriority = 'urgent' | 'high' | 'normal' | 'low';
@@ -49,6 +63,9 @@ export interface TaskData {
   assignees: number[];
   sprintId?: string;
   tags?: string[];
+  epicId?: string;
+  status?: string;
+  dueDate?: number; // timestamp in milliseconds
 }
 
 export interface TaskSuggestion {
@@ -61,6 +78,9 @@ export interface TaskSuggestion {
   suggestedSpaceId?: string;
   suggestedAssigneeIds?: number[];
   suggestedSprintId?: string;
+  suggestedEpicId?: string;
+  suggestedStatus?: string;
+  suggestedDueDate?: number;
 }
 
 export interface TaskFormData {
@@ -69,5 +89,7 @@ export interface TaskFormData {
   availableSpaces?: { id: string; name: string }[];
   availableMembers?: { id: number; username: string; email: string }[];
   availableSprints?: { id: string; name: string }[];
+  availableEpics?: { id: string; name: string }[];
+  availableStatuses?: { id: string; status: string }[];
 }
 

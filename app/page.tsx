@@ -32,6 +32,8 @@ import type {
   ClickUpSpace,
   ClickUpSprint,
   ClickUpMember,
+  ClickUpEpic,
+  ClickUpStatus,
   TaskSuggestion,
 } from '@/lib/types';
 
@@ -49,12 +51,17 @@ export default function Home() {
   const [selectedAssignees, setSelectedAssignees] = useState<number[]>([]);
   const [selectedSprint, setSelectedSprint] = useState<string>('');
   const [tags, setTags] = useState<string[]>([]);
+  const [selectedEpic, setSelectedEpic] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
 
   // ClickUp data
   const [workspace, setWorkspace] = useState<ClickUpWorkspace | null>(null);
   const [spaces, setSpaces] = useState<ClickUpSpace[]>([]);
   const [sprints, setSprints] = useState<ClickUpSprint[]>([]);
   const [teamMembers, setTeamMembers] = useState<ClickUpMember[]>([]);
+  const [epics, setEpics] = useState<ClickUpEpic[]>([]);
+  const [statuses, setStatuses] = useState<ClickUpStatus[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<string>('');
   
   // Search states
@@ -80,6 +87,14 @@ export default function Home() {
       loadTeamMembers(workspace.id);
     }
   }, [workspace]);
+
+  // Load epics and statuses when space is selected
+  useEffect(() => {
+    if (selectedSpace) {
+      loadEpics(selectedSpace);
+      loadStatuses(selectedSpace);
+    }
+  }, [selectedSpace]);
 
   const loadWorkspace = async () => {
     try {
@@ -125,6 +140,54 @@ export default function Home() {
     }
   };
 
+  const loadEpics = async (spaceId: string) => {
+    try {
+      const response = await fetch(`/api/clickup/epics?spaceId=${spaceId}`);
+      if (!response.ok) throw new Error('Error al cargar épicas');
+      const data = await response.json();
+      setEpics(data);
+    } catch (error: any) {
+      console.error('Error loading epics:', error);
+      setEpics([]);
+    }
+  };
+
+  const loadStatuses = async (spaceId: string) => {
+    try {
+      const response = await fetch(`/api/clickup/statuses?spaceId=${spaceId}`);
+      if (!response.ok) throw new Error('Error al cargar estados');
+      const data = await response.json();
+      setStatuses(data);
+      
+      // Establecer estado por defecto si no hay uno seleccionado
+      if (data.length > 0 && !selectedStatus) {
+        // Buscar "TO-DO" o "TO DO" como estado por defecto
+        const toDoStatus = data.find((s: ClickUpStatus) => 
+          s.status.toLowerCase() === 'to-do' || 
+          s.status.toLowerCase() === 'to do' ||
+          s.status.toLowerCase() === 'todo'
+        );
+        
+        // Si no se encuentra TO-DO, buscar "TO ESTIMATE"
+        const toEstimateStatus = data.find((s: ClickUpStatus) => 
+          s.status.toLowerCase().includes('estimate')
+        );
+        
+        // Usar TO-DO si existe, sino TO ESTIMATE, sino el primero
+        if (toDoStatus) {
+          setSelectedStatus(toDoStatus.status);
+        } else if (toEstimateStatus) {
+          setSelectedStatus(toEstimateStatus.status);
+        } else if (data.length > 0) {
+          setSelectedStatus(data[0].status);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error loading statuses:', error);
+      setStatuses([]);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
@@ -163,6 +226,8 @@ export default function Home() {
             email: m.email || '' 
           })),
           availableSprints: sprints.map(s => ({ id: s.id, name: s.name })),
+          availableEpics: epics.map(e => ({ id: e.id, name: e.name })),
+          availableStatuses: statuses.map(s => ({ id: s.id, status: s.status })),
         }),
       });
 
@@ -198,6 +263,19 @@ export default function Home() {
         setSelectedSprint(suggestion.suggestedSprintId);
       }
 
+      if (suggestion.suggestedEpicId) {
+        setSelectedEpic(suggestion.suggestedEpicId);
+      }
+
+      if (suggestion.suggestedStatus) {
+        setSelectedStatus(suggestion.suggestedStatus);
+      }
+
+      if (suggestion.suggestedDueDate) {
+        const date = new Date(suggestion.suggestedDueDate);
+        setDueDate(date.toISOString().split('T')[0]);
+      }
+
       showMessage('success', '¡Sugerencias generadas! Revisa y edita los campos según necesites');
     } catch (error: any) {
       showMessage('error', error.message);
@@ -210,6 +288,10 @@ export default function Home() {
     // Validate required fields
     if (!taskName.trim()) {
       showMessage('error', 'El nombre de la tarea es requerido');
+      return;
+    }
+    if (!taskDescription.trim()) {
+      showMessage('error', 'La descripción de la tarea es requerida');
       return;
     }
     if (!selectedSpace) {
@@ -234,6 +316,9 @@ export default function Home() {
         assignees: selectedAssignees,
         sprintId: selectedSprint || undefined,
         tags: tags.length > 0 ? tags : undefined,
+        epicId: selectedEpic || undefined,
+        status: selectedStatus || undefined,
+        dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
       };
 
       const response = await fetch('/api/clickup/create-task', {
@@ -265,6 +350,11 @@ export default function Home() {
       setTags([]);
       setSelectedSpace('');
       setSpaceSearch('');
+      setSelectedEpic('');
+      setSelectedStatus('');
+      setDueDate('');
+      setEpics([]);
+      setStatuses([]);
     } catch (error: any) {
       showMessage('error', error.message);
     } finally {
@@ -423,13 +513,16 @@ export default function Home() {
 
             {/* Task Description */}
             <div>
-              <label className="block font-semibold mb-2">Descripción</label>
+              <label className="block font-semibold mb-2">
+                Descripción <span className="text-red-500">*</span>
+              </label>
               <Textarea
                 value={taskDescription}
                 onChange={(e) => setTaskDescription(e.target.value)}
                 className="min-h-[150px]"
                 placeholder="Descripción detallada con criterios de aceptación..."
                 rows={6}
+                required
               />
             </div>
 
@@ -491,6 +584,101 @@ export default function Home() {
                     <p className="text-xs text-muted-foreground mt-1">Escribe al menos 2 caracteres</p>
                   )}
                 </div>
+              )}
+            </div>
+
+            {/* Épica */}
+            <div>
+              <label className="block font-semibold mb-2">Épica (opcional)</label>
+              <Select 
+                value={selectedEpic || undefined} 
+                onValueChange={(value) => setSelectedEpic(value || '')}
+                disabled={!selectedSpace}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={!selectedSpace ? "Primero selecciona un proyecto" : "Sin épica asignada"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {epics.length > 0 ? (
+                    epics.map((epic) => (
+                      <SelectItem key={epic.id} value={epic.id}>
+                        {epic.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-epics" disabled>
+                      No hay épicas disponibles
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {selectedEpic && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedEpic('')}
+                  className="mt-2 h-8 text-xs"
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Quitar épica
+                </Button>
+              )}
+            </div>
+
+            {/* Estado */}
+            <div>
+              <label className="block font-semibold mb-2">Estado</label>
+              <Select 
+                value={selectedStatus || undefined} 
+                onValueChange={(value) => setSelectedStatus(value || '')}
+                disabled={!selectedSpace}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={!selectedSpace ? "Primero selecciona un proyecto" : "Selecciona un estado"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {statuses.length > 0 ? (
+                    statuses.map((status) => (
+                      <SelectItem key={status.id} value={status.status}>
+                        <div className="flex items-center gap-2">
+                          {status.color && (
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: status.color }}
+                            />
+                          )}
+                          {status.status}
+                        </div>
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-statuses" disabled>
+                      Cargando estados...
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Fecha Límite */}
+            <div>
+              <label className="block font-semibold mb-2">Fecha Límite (opcional)</label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                placeholder="Selecciona una fecha"
+              />
+              {dueDate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDueDate('')}
+                  className="mt-2 h-8 text-xs"
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Quitar fecha límite
+                </Button>
               )}
             </div>
 
@@ -719,7 +907,7 @@ export default function Home() {
             <div className="pt-6 border-t mt-6">
               <Button
                 onClick={handleClickSubmit}
-                disabled={!taskName.trim() || !selectedSpace || isCreating}
+                disabled={!taskName.trim() || !taskDescription.trim() || !selectedSpace || isCreating}
                 className="w-full"
                 size="lg"
               >
@@ -753,6 +941,31 @@ export default function Home() {
                   <p className="text-sm font-semibold text-foreground mb-1">Proyecto:</p>
                   <p className="text-sm">{spaces.find(s => s.id === selectedSpace)?.name}</p>
                 </div>
+
+                {selectedEpic && (
+                  <div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Épica:</p>
+                    <p className="text-sm">{epics.find(e => e.id === selectedEpic)?.name}</p>
+                  </div>
+                )}
+
+                {selectedStatus && (
+                  <div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Estado:</p>
+                    <p className="text-sm">{selectedStatus}</p>
+                  </div>
+                )}
+
+                {dueDate && (
+                  <div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Fecha Límite:</p>
+                    <p className="text-sm">{new Date(dueDate).toLocaleDateString('es-ES', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}</p>
+                  </div>
+                )}
 
                 {selectedAssignees.length > 0 && (
                   <div>

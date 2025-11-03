@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ClickUpWorkspace, ClickUpSpace, ClickUpList, ClickUpSprint, ClickUpMember, TaskData } from './types';
+import type { ClickUpWorkspace, ClickUpSpace, ClickUpList, ClickUpSprint, ClickUpMember, ClickUpEpic, ClickUpStatus, TaskData } from './types';
 
 const CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 const ROCKET_DIGITAL_WORKSPACE = 'Rocket Digital';
@@ -133,6 +133,162 @@ export class ClickUpService {
     }
   }
 
+  async getEpics(spaceId: string): Promise<ClickUpEpic[]> {
+    try {
+      const epics: ClickUpEpic[] = [];
+
+      // Obtener todos los folders del espacio
+      try {
+        const foldersResponse = await axios.get(
+          `${CLICKUP_API_BASE}/space/${spaceId}/folder?archived=false`,
+          {
+            headers: this.getHeaders(),
+          }
+        );
+
+        const folders = foldersResponse.data.folders || [];
+        console.log(`📁 Folders encontrados en space ${spaceId}:`, folders.map((f: any) => f.name));
+        
+        // Para cada folder, obtener sus listas (que serán las épicas)
+        for (const folder of folders) {
+          try {
+            const listsResponse = await axios.get(
+              `${CLICKUP_API_BASE}/folder/${folder.id}/list?archived=false`,
+              {
+                headers: this.getHeaders(),
+              }
+            );
+
+            const lists = listsResponse.data.lists || [];
+            console.log(`📋 Listas en folder "${folder.name}":`, lists.map((l: any) => l.name));
+            
+            // Cada lista se considera una épica
+            lists.forEach((list: any) => {
+              epics.push({
+                id: list.id,
+                name: list.name,
+                color: list.color,
+              });
+            });
+          } catch (error: any) {
+            console.error(`Error fetching lists from folder ${folder.name}:`, error.message);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error fetching folders:', error.response?.data || error.message);
+      }
+
+      // También buscar listas directas del espacio (sin folder)
+      try {
+        const listsResponse = await axios.get(
+          `${CLICKUP_API_BASE}/space/${spaceId}/list?archived=false`,
+          {
+            headers: this.getHeaders(),
+          }
+        );
+
+        const lists = listsResponse.data.lists || [];
+        console.log(`📋 Listas directas del space:`, lists.map((l: any) => l.name));
+        
+        // Agregar todas las listas directas como épicas
+        lists.forEach((list: any) => {
+          epics.push({
+            id: list.id,
+            name: list.name,
+            color: list.color,
+          });
+        });
+      } catch (error: any) {
+        console.error('Error fetching lists:', error.response?.data || error.message);
+      }
+
+      console.log(`✅ Total de épicas encontradas para space ${spaceId}:`, epics.length, epics);
+      return epics;
+    } catch (error: any) {
+      console.error('❌ Error fetching epics:', error.response?.data || error);
+      return [];
+    }
+  }
+
+  async getStatuses(spaceId: string): Promise<ClickUpStatus[]> {
+    try {
+      let firstListId: string | null = null;
+
+      // 1. Intentar obtener listas de los folders
+      try {
+        const foldersResponse = await axios.get(
+          `${CLICKUP_API_BASE}/space/${spaceId}/folder?archived=false`,
+          {
+            headers: this.getHeaders(),
+          }
+        );
+
+        const folders = foldersResponse.data.folders || [];
+        
+        // Buscar en el primer folder
+        if (folders.length > 0) {
+          const listsResponse = await axios.get(
+            `${CLICKUP_API_BASE}/folder/${folders[0].id}/list?archived=false`,
+            {
+              headers: this.getHeaders(),
+            }
+          );
+
+          const lists = listsResponse.data.lists || [];
+          if (lists.length > 0) {
+            firstListId = lists[0].id;
+            console.log(`📊 Obteniendo estados de la lista: ${lists[0].name} (${firstListId})`);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching lists from folders:', error);
+      }
+
+      // 2. Si no se encontró en folders, buscar listas directas
+      if (!firstListId) {
+        const listsResponse = await axios.get(
+          `${CLICKUP_API_BASE}/space/${spaceId}/list?archived=false`,
+          {
+            headers: this.getHeaders(),
+          }
+        );
+
+        const lists = listsResponse.data.lists || [];
+        if (lists.length > 0) {
+          firstListId = lists[0].id;
+          console.log(`📊 Obteniendo estados de la lista directa: ${lists[0].name} (${firstListId})`);
+        }
+      }
+
+      if (!firstListId) {
+        console.log('⚠️ No se encontraron listas para obtener estados');
+        return [];
+      }
+
+      // Obtener estados de la lista
+      const statusesResponse = await axios.get(
+        `${CLICKUP_API_BASE}/list/${firstListId}`,
+        {
+          headers: this.getHeaders(),
+        }
+      );
+
+      const statuses = statusesResponse.data.statuses || [];
+      console.log(`✅ Estados encontrados:`, statuses.map((s: any) => s.status));
+      
+      return statuses.map((status: any) => ({
+        id: status.id || status.status,
+        status: status.status,
+        color: status.color,
+        orderindex: status.orderindex,
+        type: status.type,
+      }));
+    } catch (error: any) {
+      console.error('❌ Error fetching statuses:', error.response?.data || error);
+      return [];
+    }
+  }
+
   async createTask(spaceId: string, taskData: TaskData) {
     try {
       // Primero necesitamos obtener una lista del space para crear la tarea
@@ -165,6 +321,21 @@ export class ClickUpService {
         assignees: taskData.assignees,
         tags: taskData.tags || [],
       };
+
+      // Agregar estado si se especificó
+      if (taskData.status) {
+        payload.status = taskData.status;
+      }
+
+      // Agregar fecha límite si se especificó
+      if (taskData.dueDate) {
+        payload.due_date = taskData.dueDate;
+      }
+
+      // Agregar épica si se especificó
+      if (taskData.epicId) {
+        payload.parent = taskData.epicId;
+      }
 
       // Si hay un sprint asignado, mover la tarea al sprint después de crearla
       const response = await axios.post(

@@ -21,8 +21,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(suggestion);
   } catch (error: any) {
     console.error('Error generating suggestion:', error);
+    
+    // Extraer el mensaje de error más relevante
+    let errorMessage = 'Error al generar sugerencias con IA';
+    
+    if (error.message) {
+      errorMessage = error.message;
+    } else if (error.error?.message) {
+      errorMessage = error.error.message;
+    }
+    
     return NextResponse.json(
-      { error: error.message || 'Error al generar sugerencias con IA' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

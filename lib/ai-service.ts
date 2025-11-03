@@ -31,9 +31,9 @@ export class AIService {
 
       const suggestion = JSON.parse(jsonMatch[0]);
       return suggestion;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating task suggestion:', error);
-      throw new Error('Error al generar sugerencias con IA');
+      throw error;
     }
   }
 
@@ -50,6 +50,14 @@ export class AIService {
       ? `\n\nSPRINTS DISPONIBLES:\n${formData.availableSprints.map(s => `- ${s.name} (ID: ${s.id})`).join('\n')}`
       : '';
 
+    const epicsContext = formData.availableEpics && formData.availableEpics.length > 0
+      ? `\n\nÉPICAS DISPONIBLES:\n${formData.availableEpics.map(e => `- ${e.name} (ID: ${e.id})`).join('\n')}`
+      : '';
+
+    const statusesContext = formData.availableStatuses && formData.availableStatuses.length > 0
+      ? `\n\nESTADOS DISPONIBLES:\n${formData.availableStatuses.map(s => `- ${s.status} (ID: ${s.id})`).join('\n')}`
+      : '';
+
     return `Actúa como un Product Manager senior especializado en proyectos Shopify (desarrollo de themes, migraciones, custom apps, etc.) e integraciones entre Shopify y terceros (e.g. ERP, CRMs, etc.).
 
 Dado el siguiente input, genera UNA tarea clara y bien estructurada para el equipo técnico.
@@ -59,6 +67,8 @@ ${formData.description}
 ${spacesContext}
 ${membersContext}
 ${sprintsContext}
+${epicsContext}
+${statusesContext}
 
 INSTRUCCIONES:
 1. **Título de la tarea**: Claro, conciso y accionable (máx 80 caracteres)
@@ -91,11 +101,27 @@ INSTRUCCIONES:
    - Bugs complejos: 120-240 min
    - Reuniones: 30-60 min
 
-7. **Asignación sugerida**: Si en el input se menciona nombres de personas o roles específicos, sugiere los IDs de los miembros del equipo correspondientes. Si no se menciona nadie específicamente, deja el array vacío.
+7. **Asignación sugerida**: Analiza el input y el tipo de tarea para sugerir responsables:
+   - Si se mencionan nombres específicos o emails, sugiere esos IDs
+   - Si se menciona un rol (frontend, backend, designer, etc.), busca miembros con nombres/emails relacionados
+   - Para tareas de Shopify theme/Liquid: busca desarrolladores frontend
+   - Para tareas de API/backend: busca desarrolladores backend
+   - Para tareas de diseño/UX: busca diseñadores
+   - Para reuniones/meets: incluye a los stakeholders mencionados
+   - Si no hay suficiente información para inferir, deja el array vacío
+   - Puedes sugerir múltiples personas si la tarea lo requiere
 
 8. **Sprint sugerido**: Si en el input se menciona un sprint específico o una fecha que coincide con un sprint, sugiere el ID del sprint. Si no, deja null.
 
-9. **Tags**: Palabras clave relevantes (shopify, liquid, graphql, theme, app, migration, integration, frontend, backend, etc.)
+9. **Épica sugerida**: Si en el input se menciona una épica específica o el trabajo claramente pertenece a una de las épicas disponibles, sugiere el ID de la épica. Si no, deja null.
+
+10. **Estado sugerido**: Basándote en los estados disponibles:
+   - Si la tarea menciona que necesita estimación o análisis previo, sugiere "TO ESTIMATE" o similar
+   - Si la tarea está lista para trabajarse, sugiere "TO-DO" o "TO DO" 
+   - Si no hay suficiente información, sugiere el primer estado de tipo "open" o "to do"
+   - IMPORTANTE: Usa el nombre exacto del estado tal como aparece en ESTADOS DISPONIBLES
+
+11. **Tags**: Palabras clave relevantes (shopify, liquid, graphql, theme, app, migration, integration, frontend, backend, etc.)
 
 RESPONDE ÚNICAMENTE CON UN JSON (sin markdown, sin explicaciones, sin texto adicional) con esta estructura EXACTA:
 
@@ -108,16 +134,23 @@ RESPONDE ÚNICAMENTE CON UN JSON (sin markdown, sin explicaciones, sin texto adi
   "tags": ["shopify", "tag1", "tag2"],
   "suggestedSpaceId": null,
   "suggestedAssigneeIds": [],
-  "suggestedSprintId": null
+  "suggestedSprintId": null,
+  "suggestedEpicId": null,
+  "suggestedStatus": "TO-DO"
 }
 
 REGLAS IMPORTANTES:
 - timeEstimate SIEMPRE en MINUTOS (nunca en horas)
-- Si no estás seguro del space, assignees o sprint, usa null o array vacío
-- Solo sugiere assignees si se mencionan explícitamente en el input
+- Si no estás seguro del space, assignees, sprint o epic, usa null o array vacío
+- Para assignees: puedes inferir basándote en el tipo de trabajo (frontend, backend, diseño, etc.) y los nombres/emails de los miembros disponibles
 - Solo sugiere sprint si se menciona explícitamente
+- Solo sugiere epic si se menciona explícitamente o hay una relación clara
+- Para suggestedStatus, usa EXACTAMENTE el nombre que aparece en ESTADOS DISPONIBLES (respeta mayúsculas/minúsculas y espacios)
+- Si no hay estados disponibles, suggestedStatus debe ser null
+- Si hay estados disponibles pero no estás seguro cuál usar, selecciona el que más se parezca a "TO-DO" o "TO DO"
 - La descripción debe ser profesional y en español
 - Usa formato markdown para mejor legibilidad
-- Sé específico con tecnologías de Shopify cuando aplique`;
+- Sé específico con tecnologías de Shopify cuando aplique
+- suggestedAssigneeIds debe ser un array de números (IDs), no de strings`;
   }
 }
