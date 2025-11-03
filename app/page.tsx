@@ -248,10 +248,12 @@ export default function Home() {
 
       // Apply suggested space, assignees and sprint if provided
       if (suggestion.suggestedSpaceId) {
-        setSelectedSpace(suggestion.suggestedSpaceId);
         const space = spaces.find(s => s.id === suggestion.suggestedSpaceId);
         if (space) {
-          setSpaceSearch(space.name);
+          setSelectedSpace(suggestion.suggestedSpaceId);
+          setSpaceSearch(''); // Limpiar búsqueda
+        } else {
+          console.warn(`Espacio sugerido no encontrado: ${suggestion.suggestedSpaceId}`);
         }
       }
 
@@ -536,7 +538,7 @@ export default function Home() {
               {selectedSpace ? (
                 <div className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-lg">
                   <div className="flex-1 font-medium text-foreground">
-                    ✓ {spaces.find(s => s.id === selectedSpace)?.name}
+                    ✓ {spaces.find(s => s.id === selectedSpace)?.name || 'Proyecto seleccionado'}
                   </div>
                   <Button
                     variant="ghost"
