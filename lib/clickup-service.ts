@@ -291,20 +291,69 @@ export class ClickUpService {
 
   async createTask(spaceId: string, taskData: TaskData) {
     try {
-      // Primero necesitamos obtener una lista del space para crear la tarea
-      const listsResponse = await axios.get(
-        `${CLICKUP_API_BASE}/space/${spaceId}/list?archived=false`,
-        {
-          headers: this.getHeaders(),
+      let listId: string | null = null;
+
+      // Si se especificó una épica, usar esa lista (épica) para crear la tarea
+      if (taskData.epicId) {
+        listId = taskData.epicId;
+        console.log(`✅ Usando épica como lista destino: ${listId}`);
+      } else {
+        // 1. Intentar obtener listas directas del space
+        try {
+          const listsResponse = await axios.get(
+            `${CLICKUP_API_BASE}/space/${spaceId}/list?archived=false`,
+            {
+              headers: this.getHeaders(),
+            }
+          );
+
+          if (listsResponse.data.lists && listsResponse.data.lists.length > 0) {
+            listId = listsResponse.data.lists[0].id;
+            console.log(`✅ Lista directa encontrada: ${listsResponse.data.lists[0].name} (${listId})`);
+          }
+        } catch (error) {
+          console.log('⚠️ No se encontraron listas directas en el space');
         }
-      );
 
-      if (!listsResponse.data.lists || listsResponse.data.lists.length === 0) {
-        throw new Error('No se encontraron listas en el proyecto seleccionado');
+        // 2. Si no hay listas directas, buscar en folders
+        if (!listId) {
+          try {
+            const foldersResponse = await axios.get(
+              `${CLICKUP_API_BASE}/space/${spaceId}/folder?archived=false`,
+              {
+                headers: this.getHeaders(),
+              }
+            );
+
+            const folders = foldersResponse.data.folders || [];
+            console.log(`📁 Folders encontrados: ${folders.length}`);
+
+            // Buscar en cada folder hasta encontrar una lista
+            for (const folder of folders) {
+              const folderListsResponse = await axios.get(
+                `${CLICKUP_API_BASE}/folder/${folder.id}/list?archived=false`,
+                {
+                  headers: this.getHeaders(),
+                }
+              );
+
+              const lists = folderListsResponse.data.lists || [];
+              if (lists.length > 0) {
+                listId = lists[0].id;
+                console.log(`✅ Lista encontrada en folder "${folder.name}": ${lists[0].name} (${listId})`);
+                break;
+              }
+            }
+          } catch (error) {
+            console.error('⚠️ Error buscando listas en folders:', error);
+          }
+        }
+
+        // 3. Si aún no se encontró ninguna lista, lanzar error
+        if (!listId) {
+          throw new Error('No se encontraron listas en el proyecto seleccionado. Asegúrate de que el proyecto tenga al menos una lista creada.');
+        }
       }
-
-      // Usar la primera lista disponible
-      const listId = listsResponse.data.lists[0].id;
 
       const priorityMap: Record<string, number> = {
         urgent: 1,
@@ -336,13 +385,11 @@ export class ClickUpService {
         payload.due_date = taskData.dueDate;
       }
 
-      // Agregar épica si se especificó
-      if (taskData.epicId) {
-        payload.parent = taskData.epicId;
-      }
+      // Nota: No agregamos parent porque si hay épica, se crea directamente en esa lista
 
       // Si hay un sprint asignado, mover la tarea al sprint después de crearla
-      console.log('📤 Enviando tarea a ClickUp - Payload:', JSON.stringify(payload, null, 2));
+      console.log('📤 Enviando tarea a ClickUp - List ID:', listId);
+      console.log('📤 Payload:', JSON.stringify(payload, null, 2));
       
       const response = await axios.post(
         `${CLICKUP_API_BASE}/list/${listId}/task`,
@@ -351,6 +398,8 @@ export class ClickUpService {
           headers: this.getHeaders(),
         }
       );
+      
+      console.log('✅ Tarea creada exitosamente:', response.data.id);
 
       const createdTask = response.data;
 
@@ -372,7 +421,20 @@ export class ClickUpService {
 
       return createdTask;
     } catch (error: any) {
-      console.error('Error creating task:', error);
+      console.error('❌ Error creating task:', error);
+      
+      // Si el error ya tiene un mensaje personalizado, usarlo
+      if (error.message && !error.response) {
+        throw error;
+      }
+      
+      // Si es un error de la API de ClickUp, mostrar más detalles
+      if (error.response?.data) {
+        console.error('ClickUp API Error Details:', JSON.stringify(error.response.data, null, 2));
+        const errorMsg = error.response.data.err || error.response.data.error || 'Error desconocido de ClickUp';
+        throw new Error(`No se pudo crear la tarea en ClickUp: ${errorMsg}`);
+      }
+      
       throw new Error('No se pudo crear la tarea en ClickUp');
     }
   }
