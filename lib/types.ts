@@ -60,7 +60,7 @@ export interface TaskData {
   type: TaskType;
   priority: TaskPriority;
   timeEstimate: number; // in minutes
-  assignees: number[];
+  assignees?: number[];
   sprintId?: string;
   tags?: string[];
   epicId?: string;

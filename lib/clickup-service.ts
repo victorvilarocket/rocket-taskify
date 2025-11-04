@@ -318,9 +318,13 @@ export class ClickUpService {
         description: taskData.description,
         priority: priorityMap[taskData.priority],
         time_estimate: taskData.timeEstimate * 60000, // Convert minutes to milliseconds
-        assignees: taskData.assignees,
         tags: taskData.tags || [],
       };
+
+      // Agregar assignees solo si se especificaron
+      if (taskData.assignees && taskData.assignees.length > 0) {
+        payload.assignees = taskData.assignees;
+      }
 
       // Agregar estado si se especificó
       if (taskData.status) {
@@ -338,6 +342,8 @@ export class ClickUpService {
       }
 
       // Si hay un sprint asignado, mover la tarea al sprint después de crearla
+      console.log('📤 Enviando tarea a ClickUp - Payload:', JSON.stringify(payload, null, 2));
+      
       const response = await axios.post(
         `${CLICKUP_API_BASE}/list/${listId}/task`,
         payload,
@@ -366,7 +372,7 @@ export class ClickUpService {
 
       return createdTask;
     } catch (error: any) {
-      console.error('Error creating task:', error.response?.data || error);
+      console.error('Error creating task:', error);
       throw new Error('No se pudo crear la tarea en ClickUp');
     }
   }
