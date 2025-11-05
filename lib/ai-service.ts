@@ -92,14 +92,17 @@ INSTRUCCIONES:
    - "normal": Tarea estándar
    - "low": Puede esperar, mejoras menores
 
-6. **Estimación**: Tiempo realista en MINUTOS. Considera:
-   - Research/análisis: 30-60 min
+6. **Estimación**: Tiempo realista en MINUTOS (puede ser cualquier cantidad). Ejemplos de referencia:
+   - Cambios muy pequeños/quick fixes: 15-30 min
+   - Research/análisis básico: 30-60 min
    - Tareas pequeñas (cambios menores): 60-120 min
-   - Tareas medianas (features simples): 120-240 min
-   - Tareas grandes (features complejas): 240-480 min
+   - Tareas medianas (features simples): 120-240 min (2-4 horas)
+   - Tareas grandes (features complejas): 240-480 min (4-8 horas)
    - Bugs simples: 30-90 min
    - Bugs complejos: 120-240 min
    - Reuniones: 30-60 min
+   - IMPORTANTE: Estima el tiempo real que crees que tomará, no solo uses estos rangos. Puedes estimar 45 min, 90 min, 180 min, etc.
+   - IMPORTANTE: Aplica un margen de tiempo al alza (+10%)
 
 7. **Asignación sugerida**: Analiza el input y el tipo de tarea para sugerir responsables:
    - Si se mencionan nombres específicos o emails, sugiere esos IDs
@@ -140,7 +143,9 @@ RESPONDE ÚNICAMENTE CON UN JSON (sin markdown, sin explicaciones, sin texto adi
 }
 
 REGLAS IMPORTANTES:
-- timeEstimate SIEMPRE en MINUTOS (nunca en horas)
+- timeEstimate SIEMPRE en MINUTOS (nunca en horas). Ejemplo: 30, 45, 60, 90, 120, 180, 240, etc.
+- Estima el tiempo real que crees necesario, puede ser cualquier número de minutos (15, 25, 45, 75, etc.)
+- Aplica un margen de tiempo al alza (+10%)
 - Si no estás seguro del space, assignees, sprint o epic, usa null o array vacío
 - Para assignees: puedes inferir basándote en el tipo de trabajo (frontend, backend, diseño, etc.) y los nombres/emails de los miembros disponibles
 - Solo sugiere sprint si se menciona explícitamente

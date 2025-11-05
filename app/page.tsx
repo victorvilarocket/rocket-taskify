@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Rocket, Sparkles, Paperclip, X, Loader2, Search } from 'lucide-react';
+import { Rocket, Sparkles, X, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,7 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { FileProcessor } from '@/lib/file-processor';
 import type {
   TaskData,
   TaskType,
@@ -38,9 +37,8 @@ import type {
 } from '@/lib/types';
 
 export default function Home() {
-  // Description and files
+  // Description
   const [description, setDescription] = useState('');
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   // Task data
   const [taskName, setTaskName] = useState('');
@@ -188,37 +186,19 @@ export default function Home() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      setAttachedFiles((prev) => [...prev, ...Array.from(files)]);
-    }
-  };
-
-  const removeFile = (index: number) => {
-    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const handleSuggest = async () => {
-    if (!description.trim() && attachedFiles.length === 0) {
-      showMessage('error', 'Por favor, describe la tarea o adjunta archivos');
+    if (!description.trim()) {
+      showMessage('error', 'Por favor, describe la tarea');
       return;
     }
 
     setIsSuggesting(true);
     try {
-      let fullDescription = description;
-
-      if (attachedFiles.length > 0) {
-        const fileContent = await FileProcessor.processFiles(attachedFiles);
-        fullDescription += '\n\n--- ARCHIVOS ADJUNTOS ---\n' + fileContent;
-      }
-
       const response = await fetch('/api/ai/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description: fullDescription,
+          description: description,
           availableSpaces: spaces.map(s => ({ id: s.id, name: s.name })),
           availableMembers: teamMembers.map(m => ({ 
             id: m.id, 
@@ -341,7 +321,6 @@ export default function Home() {
       
       // Reset form
       setDescription('');
-      setAttachedFiles([]);
       setTaskName('');
       setTaskDescription('');
       setTaskType('task');
@@ -431,52 +410,13 @@ export default function Home() {
                 placeholder="Ej: Necesitamos crear una nueva sección en el tema de Shopify para mostrar productos destacados con un carrusel..."
                 rows={5}
               />
-
-              {/* File Upload */}
-              <div className="mt-3">
-                <label className="cursor-pointer flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-                  <Paperclip className="w-4 h-4" />
-                  <span>o adjunta archivos (TXT, JSON, PDF, imágenes)</span>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".txt,.json,.pdf,.doc,.docx,image/*"
-                  />
-                </label>
-
-                {attachedFiles.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {attachedFiles.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border text-sm"
-                      >
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <Paperclip className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate">{file.name}</span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                          className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* 2. Suggest Button */}
             <div className="pt-2">
               <Button
                 onClick={handleSuggest}
-                disabled={isSuggesting || (!description.trim() && attachedFiles.length === 0)}
+                disabled={isSuggesting || !description.trim()}
                 className="w-full"
                 size="lg"
               >

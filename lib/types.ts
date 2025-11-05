@@ -85,7 +85,6 @@ export interface TaskSuggestion {
 
 export interface TaskFormData {
   description: string;
-  attachments?: File[];
   availableSpaces?: { id: string; name: string }[];
   availableMembers?: { id: number; username: string; email: string }[];
   availableSprints?: { id: string; name: string }[];
